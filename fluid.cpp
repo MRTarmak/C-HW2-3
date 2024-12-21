@@ -1,147 +1,169 @@
-#include <bits/stdc++.h>
+#include <iostream>
+#include <array>
+#include <limits>
+#include <utility>
+#include <ranges>
+#include <cassert>
+#include <algorithm>
+#include <random>
+#include <cstring>
+#include <fstream>
 
 using namespace std;
 
-constexpr size_t N = 36, M = 84;
-// constexpr size_t N = 14, M = 5;
 constexpr size_t T = 1'000'000;
 constexpr std::array<pair<int, int>, 4> deltas{{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
 
-// char field[N][M + 1] = {
-//     "#####",
-//     "#.  #",
-//     "#.# #",
-//     "#.# #",
-//     "#.# #",
-//     "#.# #",
-//     "#.# #",
-//     "#.# #",
-//     "#...#",
-//     "#####",
-//     "#   #",
-//     "#   #",
-//     "#   #",
-//     "#####",
-// };
+template <typename T>
+class Matrix {
+public:
+    Matrix() = default;
+    Matrix(size_t n, size_t m) : data(n, std::vector<T>(m, T{})), n(n), m(m) {};
+    Matrix(const Matrix& other) = default;
+    Matrix& operator= (const Matrix& other) = default;
 
-char field[N][M + 1] = {
-    "####################################################################################",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                       .........                                  #",
-    "#..............#            #           .........                                  #",
-    "#..............#            #           .........                                  #",
-    "#..............#            #           .........                                  #",
-    "#..............#            #                                                      #",
-    "#..............#            #                                                      #",
-    "#..............#            #                                                      #",
-    "#..............#            #                                                      #",
-    "#..............#............#                                                      #",
-    "#..............#............#                                                      #",
-    "#..............#............#                                                      #",
-    "#..............#............#                                                      #",
-    "#..............#............#                                                      #",
-    "#..............#............#                                                      #",
-    "#..............#............#                                                      #",
-    "#..............#............#                                                      #",
-    "#..............#............################                     #                 #",
-    "#...........................#....................................#                 #",
-    "#...........................#....................................#                 #",
-    "#...........................#....................................#                 #",
-    "##################################################################                 #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "#                                                                                  #",
-    "####################################################################################",
+    ~Matrix() {
+        n = 0LU;
+        m = 0LU;
+    }
+
+    void clean() {
+        for (auto i = 0LU; i < n; i++)
+            for (auto j = 0LU; j < m; j++)
+                data[i][j] = T{};
+    }
+
+    T* operator[] (size_t index) {
+        return &data[index][0];
+    }
+
+    size_t get_n() const {return n;}
+    size_t get_m() const {return m;}
+
+private:
+    std::vector<std::vector<T>> data;
+
+    size_t n = 0;
+    size_t m = 0;
 };
 
-struct Fixed {
-    constexpr Fixed(int v): v(v << 16) {}
-    constexpr Fixed(float f): v(f * (1 << 16)) {}
-    constexpr Fixed(double f): v(f * (1 << 16)) {}
-    constexpr Fixed(): v(0) {}
+size_t N, M;
+Matrix<char> field;
 
-    static constexpr Fixed from_raw(int32_t x) {
-        Fixed ret;
+template<unsigned N, bool is_fast>
+struct number_type {
+    using type = std::conditional_t<N <= 8, int_fast8_t,
+            std::conditional_t<N <= 16, int_fast16_t,
+                    std::conditional_t<N <= 32, int_fast32_t,
+                            std::conditional_t<N <= 64, int_fast64_t, void>>>>;
+};
+
+template<unsigned N>
+struct number_type<N, false> {
+    using type = std::conditional_t<N == 8, int8_t,
+            std::conditional_t<N == 16, int16_t,
+                    std::conditional_t<N == 32, int32_t,
+                            std::conditional_t<N == 64, int64_t, void>>>>;
+};
+
+template<unsigned N, bool is_fast>
+using num_type = number_type<N, is_fast>::type;
+
+template<unsigned N, unsigned K, bool fast = false>
+struct Fixed {
+    using num_t = num_type<N, fast>;
+    static const int n = N;
+    static const int k = K;
+
+    num_t v;
+
+    template<int N1, int K1, bool is_fast1>
+    constexpr Fixed(const Fixed<N1, K1, is_fast1> &other) {
+        if constexpr (K1 > K)
+            v = other.v >> (K1 - K);
+        else
+            v = other.v << (K - K1);
+    }
+
+    constexpr Fixed(int8_t v) : v(v << K) {}
+    constexpr Fixed(int16_t v) : v(v << K) {}
+    constexpr Fixed(int32_t v) : v(v << K) {}
+    constexpr Fixed(int64_t v) : v(v << K) {}
+    constexpr Fixed(float f) : v(f * (1LL << K)) {}
+    constexpr Fixed(double f) : v(f * (1LL << K)) {}
+    constexpr Fixed() : v(0) {}
+
+    explicit constexpr operator float() { return float(v) / (1LL << K); }
+    explicit constexpr operator double() { return double(v) / (1LL << K); }
+
+    static constexpr Fixed from_raw(int x) {
+        Fixed ret{};
         ret.v = x;
         return ret;
-    } 
+    }
 
-    int32_t v;
+    auto operator<=>(const Fixed &) const = default;
+    bool operator==(const Fixed &) const = default;
 
-    auto operator<=>(const Fixed&) const = default;
-    bool operator==(const Fixed&) const = default;
+    friend Fixed operator+(Fixed a, Fixed b) {
+        return Fixed::from_raw(a.v + b.v);
+    }
+
+    friend Fixed operator-(Fixed a, Fixed b) {
+        return Fixed::from_raw(a.v - b.v);
+    }
+
+    friend Fixed operator*(Fixed a, Fixed b) {
+        return Fixed::from_raw(((int64_t) a.v * b.v) >> K);
+    }
+
+    friend Fixed operator/(Fixed a, Fixed b) {
+        return Fixed::from_raw(((int64_t) a.v << K) / b.v);
+    }
+
+    friend Fixed &operator+=(Fixed &a, Fixed b) {
+        return a = a + b;
+    }
+
+    friend Fixed &operator-=(Fixed &a, Fixed b) {
+        return a = a - b;
+    }
+
+    friend Fixed &operator*=(Fixed &a, Fixed b) {
+        return a = a * b;
+    }
+
+    friend Fixed &operator/=(Fixed &a, Fixed b) {
+        return a = a / b;
+    }
+
+    friend Fixed operator-(Fixed x) {
+        return Fixed::from_raw(-x.v);
+    }
+
+    friend Fixed fabs(Fixed x) {
+        if (x.v < 0) {
+            x.v = -x.v;
+        }
+        return x;
+    }
+
+    friend std::ostream &operator<<(std::ostream &out, Fixed x) {
+        return out << x.v / (double) (1 << K);
+    }
 };
 
-static constexpr Fixed inf = Fixed::from_raw(std::numeric_limits<int32_t>::max());
-static constexpr Fixed eps = Fixed::from_raw(deltas.size());
+Fixed<32, 16> rho[256];
 
-Fixed operator+(Fixed a, Fixed b) {
-    return Fixed::from_raw(a.v + b.v);
-}
-
-Fixed operator-(Fixed a, Fixed b) {
-    return Fixed::from_raw(a.v - b.v);
-}
-
-Fixed operator*(Fixed a, Fixed b) {
-    return Fixed::from_raw(((int64_t) a.v * b.v) >> 16);
-}
-
-Fixed operator/(Fixed a, Fixed b) {
-    return Fixed::from_raw(((int64_t) a.v << 16) / b.v);
-}
-
-Fixed &operator+=(Fixed &a, Fixed b) {
-    return a = a + b;
-}
-
-Fixed &operator-=(Fixed &a, Fixed b) {
-    return a = a - b;
-}
-
-Fixed &operator*=(Fixed &a, Fixed b) {
-    return a = a * b;
-}
-
-Fixed &operator/=(Fixed &a, Fixed b) {
-    return a = a / b;
-}
-
-Fixed operator-(Fixed x) {
-    return Fixed::from_raw(-x.v);
-}
-
-Fixed abs(Fixed x) {
-    if (x.v < 0) {
-        x.v = -x.v;
-    }
-    return x;
-}
-
-ostream &operator<<(ostream &out, Fixed x) {
-    return out << x.v / (double) (1 << 16);
-}
-
-Fixed rho[256];
-
-Fixed p[N][M]{}, old_p[N][M];
+Matrix<Fixed<32, 16>> p, old_p;
 
 struct VectorField {
-    array<Fixed, deltas.size()> v[N][M];
-    Fixed &add(int x, int y, int dx, int dy, Fixed dv) {
+    Matrix<array<Fixed<32, 16>, deltas.size()>> v;
+    Fixed<32, 16> &add(int x, int y, int dx, int dy, Fixed<32, 16> dv) {
         return get(x, y, dx, dy) += dv;
     }
 
-    Fixed &get(int x, int y, int dx, int dy) {
+    Fixed<32, 16> &get(int x, int y, int dx, int dy) {
         size_t i = ranges::find(deltas, pair(dx, dy)) - deltas.begin();
         assert(i < deltas.size());
         return v[x][y][i];
@@ -149,15 +171,14 @@ struct VectorField {
 };
 
 VectorField velocity{}, velocity_flow{};
-int last_use[N][M]{};
+Matrix<int> last_use;
 int UT = 0;
-
 
 mt19937 rnd(1337);
 
-tuple<Fixed, bool, pair<int, int>> propagate_flow(int x, int y, Fixed lim) {
+tuple<Fixed<32, 16>, bool, pair<int, int>> propagate_flow(int x, int y, Fixed<32, 16> lim) {
     last_use[x][y] = UT - 1;
-    Fixed ret = 0;
+    Fixed<32, 16> ret = 0.0;
     for (auto [dx, dy] : deltas) {
         int nx = x + dx, ny = y + dy;
         if (field[nx][ny] != '#' && last_use[nx][ny] < UT) {
@@ -188,8 +209,8 @@ tuple<Fixed, bool, pair<int, int>> propagate_flow(int x, int y, Fixed lim) {
     return {ret, 0, {0, 0}};
 }
 
-Fixed random01() {
-    return Fixed::from_raw((rnd() & ((1 << 16) - 1)));
+Fixed<32, 16> random01() {
+    return Fixed<32, 16>::from_raw((rnd() & ((1 << 16) - 1)));
 }
 
 void propagate_stop(int x, int y, bool force = false) {
@@ -197,7 +218,7 @@ void propagate_stop(int x, int y, bool force = false) {
         bool stop = true;
         for (auto [dx, dy] : deltas) {
             int nx = x + dx, ny = y + dy;
-            if (field[nx][ny] != '#' && last_use[nx][ny] < UT - 1 && velocity.get(x, y, dx, dy) > 0) {
+            if (field[nx][ny] != '#' && last_use[nx][ny] < UT - 1 && velocity.get(x, y, dx, dy) > 0.0) {
                 stop = false;
                 break;
             }
@@ -209,15 +230,15 @@ void propagate_stop(int x, int y, bool force = false) {
     last_use[x][y] = UT;
     for (auto [dx, dy] : deltas) {
         int nx = x + dx, ny = y + dy;
-        if (field[nx][ny] == '#' || last_use[nx][ny] == UT || velocity.get(x, y, dx, dy) > 0) {
+        if (field[nx][ny] == '#' || last_use[nx][ny] == UT || velocity.get(x, y, dx, dy) > 0.0) {
             continue;
         }
         propagate_stop(nx, ny);
     }
 }
 
-Fixed move_prob(int x, int y) {
-    Fixed sum = 0;
+Fixed<32, 16> move_prob(int x, int y) {
+    Fixed<32, 16> sum = 0.0;
     for (size_t i = 0; i < deltas.size(); ++i) {
         auto [dx, dy] = deltas[i];
         int nx = x + dx, ny = y + dy;
@@ -225,7 +246,7 @@ Fixed move_prob(int x, int y) {
             continue;
         }
         auto v = velocity.get(x, y, dx, dy);
-        if (v < 0) {
+        if (v < 0.0) {
             continue;
         }
         sum += v;
@@ -235,8 +256,8 @@ Fixed move_prob(int x, int y) {
 
 struct ParticleParams {
     char type;
-    Fixed cur_p;
-    array<Fixed, deltas.size()> v;
+    Fixed<32, 16> cur_p;
+    array<Fixed<32, 16>, deltas.size()> v;
 
     void swap_with(int x, int y) {
         swap(field[x][y], type);
@@ -250,8 +271,8 @@ bool propagate_move(int x, int y, bool is_first) {
     bool ret = false;
     int nx = -1, ny = -1;
     do {
-        std::array<Fixed, deltas.size()> tres;
-        Fixed sum = 0;
+        std::array<Fixed<32, 16>, deltas.size()> tres;
+        Fixed<32, 16> sum = 0.0;
         for (size_t i = 0; i < deltas.size(); ++i) {
             auto [dx, dy] = deltas[i];
             int nx = x + dx, ny = y + dy;
@@ -260,7 +281,7 @@ bool propagate_move(int x, int y, bool is_first) {
                 continue;
             }
             auto v = velocity.get(x, y, dx, dy);
-            if (v < 0) {
+            if (v < 0.0) {
                 tres[i] = sum;
                 continue;
             }
@@ -268,7 +289,7 @@ bool propagate_move(int x, int y, bool is_first) {
             tres[i] = sum;
         }
 
-        if (sum == 0) {
+        if (sum == 0.0) {
             break;
         }
 
@@ -278,7 +299,7 @@ bool propagate_move(int x, int y, bool is_first) {
         auto [dx, dy] = deltas[d];
         nx = x + dx;
         ny = y + dy;
-        assert(velocity.get(x, y, dx, dy) > 0 && field[nx][ny] != '#' && last_use[nx][ny] < UT);
+        assert(velocity.get(x, y, dx, dy) > 0.0 && field[nx][ny] != '#' && last_use[nx][ny] < UT);
 
         ret = (last_use[nx][ny] == UT - 1 || propagate_move(nx, ny, false));
     } while (!ret);
@@ -286,7 +307,7 @@ bool propagate_move(int x, int y, bool is_first) {
     for (size_t i = 0; i < deltas.size(); ++i) {
         auto [dx, dy] = deltas[i];
         int nx = x + dx, ny = y + dy;
-        if (field[nx][ny] != '#' && last_use[nx][ny] < UT - 1 && velocity.get(x, y, dx, dy) < 0) {
+        if (field[nx][ny] != '#' && last_use[nx][ny] < UT - 1 && velocity.get(x, y, dx, dy) < 0.0) {
             propagate_stop(nx, ny);
         }
     }
@@ -301,12 +322,40 @@ bool propagate_move(int x, int y, bool is_first) {
     return ret;
 }
 
-int dirs[N][M]{};
+Matrix<int64_t> dirs;
 
 int main() {
-    rho[' '] = 0.01;
-    rho['.'] = 1000;
-    Fixed g = 0.1;
+    double r1, r2;
+    double g0;
+
+    std::string line;
+    std::ifstream input("input1.txt");
+    if (input.is_open()) {
+        input >> N >> M >> r1 >> r2 >> g0;
+
+        field = Matrix<char>(N, M);
+
+        std::getline(input, line);
+        for (int i = 0; i < N; i++) {
+            std::getline(input, line);
+
+            for (int j = 0; j < M; j++)
+            {
+                field[i][j] = line[j];
+            }
+        }
+    }
+    input.close();
+
+    Fixed<32, 16> g = g0;
+    rho[' '] = r1;
+    rho['.'] = r2;
+    p = Matrix<Fixed<32, 16>>(N, M);
+    old_p = Matrix<Fixed<32, 16>>(N, M);
+    dirs = Matrix<int64_t >(N, M);
+    last_use = Matrix<int>(N, M);
+    velocity.v = Matrix<array<Fixed<32, 16>, deltas.size()>>(N, M);
+    velocity_flow.v = Matrix<array<Fixed<32, 16>, deltas.size()>>(N, M);
 
     for (size_t x = 0; x < N; ++x) {
         for (size_t y = 0; y < M; ++y) {
@@ -320,7 +369,7 @@ int main() {
 
     for (size_t i = 0; i < T; ++i) {
         
-        Fixed total_delta_p = 0;
+        Fixed<32, 16> total_delta_p = 0.0;
         // Apply external forces
         for (size_t x = 0; x < N; ++x) {
             for (size_t y = 0; y < M; ++y) {
@@ -332,7 +381,7 @@ int main() {
         }
 
         // Apply forces from p
-        memcpy(old_p, p, sizeof(p));
+        old_p = p;
         for (size_t x = 0; x < N; ++x) {
             for (size_t y = 0; y < M; ++y) {
                 if (field[x][y] == '#')
@@ -348,7 +397,7 @@ int main() {
                             continue;
                         }
                         force -= contr * rho[(int) field[nx][ny]];
-                        contr = 0;
+                        contr = 0.0;
                         velocity.add(x, y, dx, dy, force / rho[(int) field[x][y]]);
                         p[x][y] -= force / dirs[x][y];
                         total_delta_p -= force / dirs[x][y];
@@ -358,7 +407,7 @@ int main() {
         }
 
         // Make flow from velocities
-        velocity_flow = {};
+        velocity_flow.v.clean();
         bool prop = false;
         do {
             UT += 2;
@@ -366,8 +415,8 @@ int main() {
             for (size_t x = 0; x < N; ++x) {
                 for (size_t y = 0; y < M; ++y) {
                     if (field[x][y] != '#' && last_use[x][y] != UT) {
-                        auto [t, local_prop, _] = propagate_flow(x, y, 1);
-                        if (t > 0) {
+                        auto [t, local_prop, _] = propagate_flow(x, y, 1.0);
+                        if (t > 0.0) {
                             prop = 1;
                         }
                     }
@@ -383,7 +432,7 @@ int main() {
                 for (auto [dx, dy] : deltas) {
                     auto old_v = velocity.get(x, y, dx, dy);
                     auto new_v = velocity_flow.get(x, y, dx, dy);
-                    if (old_v > 0) {
+                    if (old_v > 0.0) {
                         assert(new_v <= old_v);
                         velocity.get(x, y, dx, dy) = new_v;
                         auto force = (old_v - new_v) * rho[(int) field[x][y]];
